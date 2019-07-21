@@ -1093,7 +1093,7 @@ extension OmnipodPumpManager: PumpManager {
             do {
                 podStatus = try session.getStatus()
             } catch let error {
-                completion(.failure(SetBolusError.certain(error as? PodCommsError ?? PodCommsError.commsError(error: error))))
+                completion(.failure(SetBolusError.certain(error as! PodCommsError)))
                 return
             }
 
@@ -1103,7 +1103,7 @@ extension OmnipodPumpManager: PumpManager {
                     let scheduleOffset = self.state.timeZone.scheduleOffset(forDate: Date())
                     podStatus = try session.resumeBasal(schedule: self.state.basalSchedule, scheduleOffset: scheduleOffset)
                 } catch let error {
-                    completion(.failure(SetBolusError.certain(error as? PodCommsError ?? PodCommsError.commsError(error: error))))
+                    completion(.failure(SetBolusError.certain(error as! PodCommsError)))
                     return
                 }
             }

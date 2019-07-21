@@ -44,9 +44,6 @@ class PodComms: CustomDebugStringConvertible {
     private func assignAddress(commandSession: CommandSession) throws -> PodState {
         commandSession.assertOnSessionQueue()
 
-        // Testing
-        //try sendPacket(session: commandSession)
-        
         let messageTransportState = MessageTransportState(packetNumber: 0, messageNumber: 0)
         
         // Create random address with 20 bits.  Can we use all 24 bits?
@@ -60,16 +57,23 @@ class PodComms: CustomDebugStringConvertible {
         
         let message = Message(address: 0xffffffff, messageBlocks: [assignAddress], sequenceNum: transport.messageNumber)
         
-        let response = try transport.sendMessage(message)
+        let response: Message
+
+        switch transport.sendMessage(message) {
+        case .success(let message):
+            response = message
+        case .failure(let failure):
+            throw PodCommsError.messageSendFailure(failure)
+        }
 
         if let fault = response.fault {
             self.log.error("Pod Fault: %@", String(describing: fault))
-            throw PodCommsError.podFault(fault: fault)
+            throw PodCommsError.podFault(fault)
         }
         
         guard let config = response.messageBlocks[0] as? VersionResponse else {
             let responseType = response.messageBlocks[0].blockType
-            throw PodCommsError.unexpectedResponse(response: responseType)
+            throw PodCommsError.unexpectedResponse(responseType)
         }
         
         // Pairing state should be addressAssigned
@@ -94,25 +98,27 @@ class PodComms: CustomDebugStringConvertible {
         let message = Message(address: 0xffffffff, messageBlocks: [setupPod], sequenceNum: transport.messageNumber)
 
         let response: Message
-        do {
-            response = try transport.sendMessage(message)
-        } catch let error {
-            if case PodCommsError.podAckedInsteadOfReturningResponse = error {
+
+        switch transport.sendMessage(message) {
+        case .success(let message):
+            response = message
+        case .failure(let failure):
+            if case MessageSendError.podAckedInsteadOfReturningResponse = failure.error {
                 // Pod already configured...
                 self.podState?.setupProgress = .podConfigured
                 return
             }
-            throw error
+            throw failure.error
         }
 
         if let fault = response.fault {
             self.log.error("Pod Fault: %@", String(describing: fault))
-            throw PodCommsError.podFault(fault: fault)
+            throw PodCommsError.podFault(fault)
         }
 
         guard let config = response.messageBlocks[0] as? VersionResponse else {
             let responseType = response.messageBlocks[0].blockType
-            throw PodCommsError.unexpectedResponse(response: responseType)
+            throw PodCommsError.unexpectedResponse(responseType)
         }
 
         self.podState?.setupProgress = .podConfigured
@@ -154,7 +160,7 @@ class PodComms: CustomDebugStringConvertible {
                 } catch let error as PodCommsError {
                     block(.failure(error))
                 } catch {
-                    block(.failure(PodCommsError.commsError(error: error)))
+                    fatalError("Unhandled exception during pairing: \(String(describing: error))")
                 }
             }
         }

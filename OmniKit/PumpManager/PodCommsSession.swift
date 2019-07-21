@@ -14,19 +14,16 @@ import os.log
 public enum PodCommsError: Error {
     case noPodPaired
     case invalidData
-    case noResponse
     case emptyResponse
-    case podAckedInsteadOfReturningResponse
-    case unexpectedPacketType(packetType: PacketType)
-    case unexpectedResponse(response: MessageBlockType)
+    case unexpectedResponse(MessageBlockType)
     case unknownResponseType(rawType: UInt8)
     case noRileyLinkAvailable
     case unfinalizedBolus
     case unfinalizedTempBasal
     case nonceResyncFailed
     case podSuspended
-    case podFault(fault: PodInfoFaultEvent)
-    case commsError(error: Error)
+    case podFault(PodInfoFaultEvent)
+    case messageSendFailure(MessageSendFailure)
 }
 
 extension PodCommsError: LocalizedError {
@@ -36,14 +33,8 @@ extension PodCommsError: LocalizedError {
             return LocalizedString("No pod paired", comment: "Error message shown when no pod is paired")
         case .invalidData:
             return nil
-        case .noResponse:
-            return LocalizedString("No response from pod", comment: "Error message shown when no response from pod was received")
         case .emptyResponse:
             return LocalizedString("Empty response from pod", comment: "Error message shown when empty response from pod was received")
-        case .podAckedInsteadOfReturningResponse:
-            return nil
-        case .unexpectedPacketType:
-            return nil
         case .unexpectedResponse:
             return LocalizedString("Unexpected response from pod", comment: "Error message shown when empty response from pod was received")
         case .unknownResponseType:
@@ -60,9 +51,9 @@ extension PodCommsError: LocalizedError {
             return LocalizedString("Pod is suspended", comment: "Error message action could not be performed because pod is suspended")
         case .podFault(let fault):
             let faultDescription = String(describing: fault.currentStatus)
-            return String(format: LocalizedString("Pod Fault: %1$@", comment: "Format string for pod fault code"), faultDescription)
-        case .commsError:
-            return nil
+            return String(format: LocalizedString("Pod Fault: %1$@", comment: "Format string for pod fault code (1: fault code)"), faultDescription)
+        case .messageSendFailure(let failure):
+            return String(format: LocalizedString("Message send failed: %1$@, data remaining = %2$@", comment: "Format string for message send failure (1: error) (2: data remaining flag)"), String(describing: failure.error), failure.hasUnsentData)
         }
     }
     
@@ -72,13 +63,7 @@ extension PodCommsError: LocalizedError {
             return nil
         case .invalidData:
             return nil
-        case .noResponse:
-            return nil
         case .emptyResponse:
-            return nil
-        case .podAckedInsteadOfReturningResponse:
-            return nil
-        case .unexpectedPacketType:
             return nil
         case .unexpectedResponse:
             return nil
@@ -96,7 +81,7 @@ extension PodCommsError: LocalizedError {
             return nil
         case .podFault:
             return nil
-        case .commsError:
+        case .messageSendFailure:
             return nil
         }
     }
@@ -107,13 +92,7 @@ extension PodCommsError: LocalizedError {
             return nil
         case .invalidData:
             return nil
-        case .noResponse:
-            return LocalizedString("Please bring your pod closer to the RileyLink and try again", comment: "Recovery suggestion when no response is received from pod")
         case .emptyResponse:
-            return nil
-        case .podAckedInsteadOfReturningResponse:
-            return nil
-        case .unexpectedPacketType:
             return nil
         case .unexpectedResponse:
             return nil
@@ -131,8 +110,13 @@ extension PodCommsError: LocalizedError {
             return nil
         case .podFault:
             return nil
-        case .commsError:
-            return nil
+        case .messageSendFailure(let failure):
+            switch failure.error {
+            case .noResponse:
+                return LocalizedString("Please bring your pod closer to the RileyLink and try again", comment: "Recovery suggestion when no response is received from pod")
+            default:
+                return nil
+            }
         }
     }
 }
@@ -171,10 +155,11 @@ public class PodCommsSession {
     ///   - expectFollowOnMessage: If true, the pod will expect another message within 4 minutes, or will alarm with an 0x33 (51) fault.
     /// - Returns: The received message response
     /// - Throws:
+    ///     - PodCommsError.messageSendFailure
+    ///     - PodCommsError.podFault
+    ///     - PodCommsError.unexpectedResponse
     ///     - PodCommsError.nonceResyncFailed
-    ///     - PodCommsError.noResponse
-    ///     - MessageError.invalidCrc
-    ///     - RileyLinkDeviceError
+
     func send<T: MessageBlock>(_ messageBlocks: [MessageBlock], expectFollowOnMessage: Bool = false) throws -> T {
         
         var triesRemaining = 2  // Retries only happen for nonce resync
@@ -199,9 +184,17 @@ public class PodCommsSession {
 
             let message = Message(address: podState.address, messageBlocks: blocksToSend, sequenceNum: messageNumber, expectFollowOnMessage: expectFollowOnMessage)
 
+            let result = transport.sendMessage(message)
 
-            let response = try transport.sendMessage(message)
-            
+            let response: Message
+
+            switch result {
+            case .success(let message):
+                response = message
+            case .failure(let failure):
+                throw PodCommsError.messageSendFailure(failure)
+            }
+
             // Simulate fault
             //let podInfoResponse = try PodInfoResponse(encodedData: Data(hexadecimalString: "0216020d0000000000ab6a038403ff03860000285708030d0000")!)
             //let response = Message(address: podState.address, messageBlocks: [podInfoResponse], sequenceNum: message.sequenceNum)
@@ -238,11 +231,11 @@ public class PodCommsSession {
                         podState.unfinalizedBolus?.cancel(at: now, withRemaining: fault.insulinNotDelivered)
                     }
 
-                    throw PodCommsError.podFault(fault: fault)
+                    throw PodCommsError.podFault(fault)
                 }
                 else {
                     log.error("Unexpected response: %@", String(describing: response.messageBlocks[0]))
-                    throw PodCommsError.unexpectedResponse(response: responseType)
+                    throw PodCommsError.unexpectedResponse(responseType)
                 }
             }
         }
@@ -415,11 +408,20 @@ public class PodCommsSession {
             let statusResponse: StatusResponse = try send([bolusScheduleCommand, bolusExtraCommand])
             podState.unfinalizedBolus = UnfinalizedDose(bolusAmount: units, startTime: Date().addingTimeInterval(commsOffset), scheduledCertainty: .certain)
             return DeliveryCommandResult.success(statusResponse: statusResponse)
-        } catch PodCommsError.nonceResyncFailed {
-            return DeliveryCommandResult.certainFailure(error: PodCommsError.nonceResyncFailed)
+        } catch let error as PodCommsError {
+            switch error {
+            case .messageSendFailure(let failure):
+                if failure.hasUnsentData {
+                    return DeliveryCommandResult.certainFailure(error: error)
+                } else {
+                    podState.unfinalizedBolus = UnfinalizedDose(bolusAmount: units, startTime: Date(), scheduledCertainty: .uncertain)
+                    return DeliveryCommandResult.uncertainFailure(error: error)
+                }
+            default:
+                return DeliveryCommandResult.certainFailure(error: error)
+            }
         } catch let error {
-            podState.unfinalizedBolus = UnfinalizedDose(bolusAmount: units, startTime: Date(), scheduledCertainty: .uncertain)
-            return DeliveryCommandResult.uncertainFailure(error: error as? PodCommsError ?? PodCommsError.commsError(error: error))
+            fatalError("Unhandled exception in bolus(): \(String(describing: error))")
         }
     }
     
@@ -441,7 +443,7 @@ public class PodCommsSession {
             return DeliveryCommandResult.certainFailure(error: PodCommsError.nonceResyncFailed)
         } catch let error {
             podState.unfinalizedTempBasal = UnfinalizedDose(tempBasalRate: rate, startTime: Date(), duration: duration, scheduledCertainty: .uncertain)
-            return DeliveryCommandResult.uncertainFailure(error: error as? PodCommsError ?? PodCommsError.commsError(error: error))
+            return DeliveryCommandResult.uncertainFailure(error: error as! PodCommsError)
         }
     }
     
@@ -485,7 +487,7 @@ public class PodCommsSession {
             return CancelDeliveryResult.certainFailure(error: PodCommsError.nonceResyncFailed)
         } catch let error {
             podState.unfinalizedSuspend = UnfinalizedDose(suspendStartTime: Date(), scheduledCertainty: .uncertain)
-            return CancelDeliveryResult.uncertainFailure(error: error as? PodCommsError ?? PodCommsError.commsError(error: error))
+            return CancelDeliveryResult.uncertainFailure(error: error as! PodCommsError)
         }
     }
 

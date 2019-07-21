@@ -16,7 +16,7 @@ public enum MessageError: Error {
     case validationFailed(description: String)
 }
 
-struct Message {
+public struct Message {
     let address: UInt32
     let messageBlocks: [MessageBlock]
     let sequenceNum: Int
@@ -101,7 +101,7 @@ struct Message {
 }
 
 extension Message: CustomDebugStringConvertible {
-    var debugDescription: String {
+    public var debugDescription: String {
         let sequenceNumStr = String(format: "%02d", sequenceNum)
         return "Message(\(Data(bigEndian: address).hexadecimalString) seq:\(sequenceNumStr) \(messageBlocks))"
     }

@@ -53,19 +53,38 @@ protocol MessageTransportDelegate: class {
     func messageTransport(_ messageTransport: MessageTransport, didUpdate state: MessageTransportState)
 }
 
+public enum MessageSendError: Error {
+    case podAckedInsteadOfReturningResponse
+    case unexpectedPacketType(packetType: PacketType)
+    case noResponse
+    case emptyResponse
+    case rileyLinkDeviceError(error: RileyLinkDeviceError)
+    case messageError(error: MessageError)
+}
+
+public struct MessageSendFailure {
+    let error: MessageSendError
+    let hasUnsentData: Bool
+}
+
+public enum MessageSendResult {
+    case success(Message)
+    case failure(MessageSendFailure)
+}
+
 protocol MessageTransport {
     var delegate: MessageTransportDelegate? { get set }
 
     var messageNumber: Int { get }
 
-    func sendMessage(_ message: Message) throws -> Message
+    func sendMessage(_ message: Message) -> MessageSendResult
 
     /// Asserts that the caller is currently on the session's queue
     func assertOnSessionQueue()
 }
 
 class PodMessageTransport: MessageTransport {
-    
+
     private let session: CommandSession
     
     private let log = OSLog(category: "PodMessageTransport")
@@ -153,7 +172,7 @@ class PodMessageTransport: MessageTransport {
     ///   - preambleExtension: Duration of preamble. Default is 127ms
     /// - Returns: The received response packet
     /// - Throws:
-    ///     - PodCommsError.noResponse
+    ///     - MessageSendError.noResponse
     ///     - RileyLinkDeviceError
     func exchangePackets(packet: Packet, repeatCount: Int = 0, packetResponseTimeout: TimeInterval = .milliseconds(333), exchangeTimeout:TimeInterval = .seconds(9), preambleExtension: TimeInterval = .milliseconds(127)) throws -> Packet {
         let packetData = packet.encoded()
@@ -196,29 +215,27 @@ class PodMessageTransport: MessageTransport {
             }
         }
         
-        throw PodCommsError.noResponse
+        throw MessageSendError.noResponse
     }
 
     /// Packetizes a message, and performs a set of packet exchanges to send a message and receive the response
     ///
     /// - Parameters:
     ///   - message: The message to send
-    /// - Returns: The received message response
-    /// - Throws:
-    ///     - PodCommsError.noResponse
-    ///     - MessageError.invalidCrc
-    ///     - RileyLinkDeviceError
-    func sendMessage(_ message: Message) throws -> Message {
+    /// - Returns: The message send result, which includes response or error details
+
+    func sendMessage(_ message: Message) -> MessageSendResult {
         
         messageNumber = message.sequenceNum
         incrementMessageNumber()
 
+        var dataRemaining = message.encoded()
+        log.debug("Send: %@", String(describing: message))
+        log.debug("Send(Hex): %@", dataRemaining.hexadecimalString)
+
         do {
             let responsePacket = try { () throws -> Packet in
                 var firstPacket = true
-                log.debug("Send: %@", String(describing: message))
-                var dataRemaining = message.encoded()
-                log.debug("Send(Hex): %@", dataRemaining.hexadecimalString)
                 messageLogger?.didSend(dataRemaining)
                 while true {
                     let packetType: PacketType = firstPacket ? .pdm : .con
@@ -235,7 +252,7 @@ class PodMessageTransport: MessageTransport {
             guard responsePacket.packetType != .ack else {
                 messageLogger?.didReceive(responsePacket.data)
                 log.debug("Pod responded with ack instead of response: %@", String(describing: responsePacket))
-                throw PodCommsError.podAckedInsteadOfReturningResponse
+                return .failure(MessageSendFailure(error: .podAckedInsteadOfReturningResponse, hasUnsentData: !dataRemaining.isEmpty))
             }
             
             // Assemble fragmented message from multiple packets
@@ -253,7 +270,7 @@ class PodMessageTransport: MessageTransport {
                         
                         guard conPacket.packetType == .con else {
                             log.debug("Expected CON packet, received; %@", String(describing: conPacket))
-                            throw PodCommsError.unexpectedPacketType(packetType: conPacket.packetType)
+                            throw MessageSendError.unexpectedPacketType(packetType: conPacket.packetType)
                         }
                         responseData += conPacket.data
                     }
@@ -264,7 +281,7 @@ class PodMessageTransport: MessageTransport {
             
             guard response.messageBlocks.count > 0 else {
                 log.debug("Empty response")
-                throw PodCommsError.emptyResponse
+                return .failure(MessageSendFailure(error: .emptyResponse, hasUnsentData: false))
             }
             
             if response.messageBlocks[0].blockType != .errorResponse {
@@ -272,10 +289,32 @@ class PodMessageTransport: MessageTransport {
             }
             
             log.debug("Recv: %@", String(describing: response))
-            return response            
+            return .success(response)
+        } catch let error as MessageError {
+            log.error("MessageError during communication with POD: %@", String(describing: error))
+            return .failure(MessageSendFailure(error: .messageError(error: error), hasUnsentData: !dataRemaining.isEmpty))
+        } catch let error as RileyLinkDeviceError {
+            log.error("RileyLinkDeviceError during communication with POD: %@", String(describing: error))
+            var hasUnsentData = !dataRemaining.isEmpty
+            switch error {
+            case .unsupportedCommand, .writeSizeLimitExceeded:
+                hasUnsentData = true
+            case .peripheralManagerError(let peripheralManagerError):
+                switch peripheralManagerError {
+                case .notReady, .unknownCharacteristic:
+                    hasUnsentData = true
+                default:
+                    break
+                }
+            default:
+                break
+            }
+            return .failure(MessageSendFailure(error: .rileyLinkDeviceError(error: error), hasUnsentData: hasUnsentData))
+        } catch let error as MessageSendError {
+            log.error("MessageSendError during communication with POD: %@", String(describing: error))
+            return .failure(MessageSendFailure(error: error, hasUnsentData: !dataRemaining.isEmpty))
         } catch let error {
-            log.error("Error during communication with POD: %@", String(describing: error))
-            throw error
+            fatalError("Unexpected error: \(String(describing: error))")
         }
     }
 
