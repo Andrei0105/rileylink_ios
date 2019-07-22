@@ -89,6 +89,20 @@ public struct PodState: RawRepresentable, Equatable, CustomDebugStringConvertibl
         }
         return active
     }
+
+    public var unfinalizedDoses: [UnfinalizedDose] {
+        return [unfinalizedBolus, unfinalizedTempBasal, unfinalizedSuspend, unfinalizedResume].compactMap {$0}
+    }
+
+    public var uncertainDelivery: Double {
+        return unfinalizedDoses.map { (dose) -> Double in
+            if dose.scheduledCertainty == .uncertain {
+                return dose.scheduledUnits ?? 0
+            } else {
+                return 0
+            }
+        }.reduce(0, +)
+    }
     
     public init(address: UInt32, piVersion: String, pmVersion: String, lot: UInt32, tid: UInt32) {
         self.address = address

@@ -11,6 +11,7 @@ import RileyLinkKitUI
 import LoopKit
 import OmniKit
 import LoopKitUI
+import HealthKit
 
 class OmnipodSettingsViewController: RileyLinkSettingsViewController {
 
@@ -179,6 +180,7 @@ class OmnipodSettingsViewController: RileyLinkSettingsViewController {
         case alarms
         case reservoirLevel
         case deliveredInsulin
+        case uncertainDelivery
     }
     
     // MARK: UITableViewDataSource
@@ -377,6 +379,9 @@ class OmnipodSettingsViewController: RileyLinkSettingsViewController {
                 case .deliveredInsulin:
                     cell.textLabel?.text = LocalizedString("Insulin Delivered", comment: "The title of the cell showing delivered insulin")
                     cell.setDeliveredInsulinDetail(podState.lastInsulinMeasurements)
+                case .uncertainDelivery:
+                    cell.textLabel?.text = LocalizedString("Uncertain Delivery", comment: "The title of the cell showing uncertain delivery")
+                    cell.setUncertainDeliveryDetail(podState.uncertainDelivery)
                 default:
                     break
                 }
@@ -711,10 +716,11 @@ class AlarmsTableViewCell: LoadingTableViewCell {
 
 private extension UITableViewCell {
     
-    private var insulinFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 3
+    private var insulinFormatter: QuantityFormatter {
+        let formatter = QuantityFormatter()
+        formatter.unitStyle = .long
+        formatter.numberFormatter.minimumFractionDigits = 0
+        formatter.numberFormatter.maximumFractionDigits = 0
         return formatter
     }
     
@@ -746,9 +752,8 @@ private extension UITableViewCell {
         if suspended {
             detailTextLabel?.text = LocalizedString("Suspended", comment: "The detail text of the basal row when pod is suspended")
         } else if let dose = dose {
-            if let rate = insulinFormatter.string(from: dose.rate) {
-                detailTextLabel?.text = String(format: LocalizedString("%@ U/hour", comment: "Format string for temp basal rate. (1: The localized amount)"), rate)
-            }
+            let rate = HKQuantity(unit: .internationalUnitsPerHour, doubleValue: dose.rate)
+            detailTextLabel?.text = insulinFormatter.string(from: rate, for: .internationalUnitsPerHour)
         } else {
             detailTextLabel?.text = LocalizedString("Schedule", comment: "The detail text of the basal row when pod is running scheduled basal")
         }
@@ -761,17 +766,17 @@ private extension UITableViewCell {
         }
         
         let progress = dose.progress
-        if let units = self.insulinFormatter.string(from: dose.units), let deliveredUnits = self.insulinFormatter.string(from: delivered) {
+        if let units = insulinFormatter.string(from: HKQuantity(unit: .internationalUnit(), doubleValue: dose.units), for: .internationalUnit()),
+            let deliveredUnits = insulinFormatter.string(from: HKQuantity(unit: .internationalUnit(), doubleValue: delivered), for: .internationalUnit())
+        {
             if progress >= 1 {
-                self.detailTextLabel?.text = String(format: LocalizedString("%@ U (Finished)", comment: "Format string for bolus progress when finished. (1: The localized amount)"), units)
+                self.detailTextLabel?.text = String(format: LocalizedString("%@ (Finished)", comment: "Format string for bolus progress when finished. (1: The localized amount)"), units)
             } else {
                 let progressFormatted = percentFormatter.string(from: progress * 100.0) ?? ""
                 let progressStr = String(format: LocalizedString("%@%%", comment: "Format string for bolus percent progress. (1: Percent progress)"), progressFormatted)
-                self.detailTextLabel?.text = String(format: LocalizedString("%@ U of %@ U (%@)", comment: "Format string for bolus progress. (1: The delivered amount) (2: The programmed amount) (3: the percent progress)"), deliveredUnits, units, progressStr)
+                self.detailTextLabel?.text = String(format: LocalizedString("%@ of %@ (%@)", comment: "Format string for bolus progress. (1: The delivered amount) (2: The programmed amount) (3: the percent progress)"), deliveredUnits, units, progressStr)
             }
         }
-
-
     }
     
     func setDeliveredInsulinDetail(_ measurements: PodInsulinMeasurements?) {
@@ -779,9 +784,7 @@ private extension UITableViewCell {
             detailTextLabel?.text = LocalizedString("Unknown", comment: "The detail text for delivered insulin when no measurement is available")
             return
         }
-        if let units = insulinFormatter.string(from: measurements.delivered) {
-            detailTextLabel?.text = String(format: LocalizedString("%@ U", comment: "Format string for delivered insulin. (1: The localized amount)"), units)
-        }
+        detailTextLabel?.text = insulinFormatter.string(from: HKQuantity(unit: .internationalUnit(), doubleValue: measurements.delivered), for: .internationalUnit())
     }
 
     func setReservoirDetail(_ measurements: PodInsulinMeasurements?) {
@@ -790,16 +793,18 @@ private extension UITableViewCell {
             return
         }
         if measurements.reservoirVolume == nil {
-            if let units = insulinFormatter.string(from: Pod.maximumReservoirReading) {
-                detailTextLabel?.text = String(format: LocalizedString("%@+ U", comment: "Format string for reservoir reading when above or equal to maximum reading. (1: The localized amount)"), units)
+            if let units = insulinFormatter.numberFormatter.string(from: Pod.maximumReservoirReading) {
+                detailTextLabel?.text = String(format: LocalizedString("%@+G U", comment: "Format string for reservoir reading when above or equal to maximum reading. (1: The localized amount)"), units)
             }
         } else {
-            if let reservoirValue = measurements.reservoirVolume,
-                let units = insulinFormatter.string(from: reservoirValue)
-            {
-                detailTextLabel?.text = String(format: LocalizedString("%@ U", comment: "Format string for insulin remaining in reservoir. (1: The localized amount)"), units)
+            if let reservoirValue = measurements.reservoirVolume {
+                detailTextLabel?.text = insulinFormatter.string(from: HKQuantity(unit: .internationalUnit(), doubleValue: reservoirValue), for: .internationalUnit())
             }
         }
+    }
+
+    func setUncertainDeliveryDetail(_ amount: Double) {
+        detailTextLabel?.text = insulinFormatter.string(from: HKQuantity(unit: .internationalUnit(), doubleValue: amount), for: .internationalUnit())
     }
 }
 

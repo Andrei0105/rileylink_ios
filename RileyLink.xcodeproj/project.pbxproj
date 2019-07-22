@@ -625,33 +625,12 @@
 			remoteGlobalIDString = 431CE76E1F98564100255374;
 			remoteInfo = RileyLinkBLEKit;
 		};
-		431CE77B1F98564200255374 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C12EA22F198B436800309FA4 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C12EA236198B436800309FA4;
-			remoteInfo = RileyLink;
-		};
 		431CE7821F98564200255374 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C12EA22F198B436800309FA4 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 431CE76E1F98564100255374;
 			remoteInfo = RileyLinkBLEKit;
-		};
-		4327EEB820E1E55D002598CB /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C12EA22F198B436800309FA4 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C12EA236198B436800309FA4;
-			remoteInfo = RileyLink;
-		};
-		4327EEBA20E1E562002598CB /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C12EA22F198B436800309FA4 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C12EA236198B436800309FA4;
-			remoteInfo = RileyLink;
 		};
 		4352A72A20DEC9B700CAC200 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -793,7 +772,7 @@
 			remoteGlobalIDString = C10D9BC01C8269D500378342;
 			remoteInfo = MinimedKit;
 		};
-		C12EA257198B436900309FA4 /* PBXContainerItemProxy */ = {
+		C1785B4922E4E3F70052C422 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C12EA22F198B436800309FA4 /* Project object */;
 			proxyType = 1;
@@ -806,13 +785,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = C1B3830A1CD0665D00CE7782;
 			remoteInfo = NightscoutUploadKit;
-		};
-		C1B383181CD0665D00CE7782 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C12EA22F198B436800309FA4 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C12EA236198B436800309FA4;
-			remoteInfo = RileyLink;
 		};
 		C1B3831E1CD0665D00CE7782 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -2728,7 +2700,6 @@
 			);
 			dependencies = (
 				431CE77A1F98564200255374 /* PBXTargetDependency */,
-				431CE77C1F98564200255374 /* PBXTargetDependency */,
 			);
 			name = RileyLinkBLEKitTests;
 			productName = RileyLinkBLEKitTests;
@@ -2786,7 +2757,6 @@
 			);
 			dependencies = (
 				43722FBA1CB9F7640038B7F2 /* PBXTargetDependency */,
-				4327EEBB20E1E562002598CB /* PBXTargetDependency */,
 			);
 			name = RileyLinkKitTests;
 			productName = RileyLinkKitTests;
@@ -2862,7 +2832,6 @@
 			);
 			dependencies = (
 				C10D9BCD1C8269D500378342 /* PBXTargetDependency */,
-				4327EEB920E1E55D002598CB /* PBXTargetDependency */,
 			);
 			name = MinimedKitTests;
 			productName = MinimedKitTests;
@@ -2908,8 +2877,8 @@
 			buildRules = (
 			);
 			dependencies = (
+				C1785B4A22E4E3F70052C422 /* PBXTargetDependency */,
 				A9B839C522809D82004E745E /* PBXTargetDependency */,
-				C12EA258198B436900309FA4 /* PBXTargetDependency */,
 			);
 			name = RileyLinkTests;
 			productName = RileyLinkTests;
@@ -2950,7 +2919,6 @@
 			dependencies = (
 				A9B839CF22809DCF004E745E /* PBXTargetDependency */,
 				C1B383171CD0665D00CE7782 /* PBXTargetDependency */,
-				C1B383191CD0665D00CE7782 /* PBXTargetDependency */,
 			);
 			name = NightscoutUploadKitTests;
 			productName = NightscoutUploadKitTests;
@@ -3989,25 +3957,10 @@
 			target = 431CE76E1F98564100255374 /* RileyLinkBLEKit */;
 			targetProxy = 431CE7791F98564200255374 /* PBXContainerItemProxy */;
 		};
-		431CE77C1F98564200255374 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C12EA236198B436800309FA4 /* RileyLink */;
-			targetProxy = 431CE77B1F98564200255374 /* PBXContainerItemProxy */;
-		};
 		431CE7831F98564200255374 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 431CE76E1F98564100255374 /* RileyLinkBLEKit */;
 			targetProxy = 431CE7821F98564200255374 /* PBXContainerItemProxy */;
-		};
-		4327EEB920E1E55D002598CB /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C12EA236198B436800309FA4 /* RileyLink */;
-			targetProxy = 4327EEB820E1E55D002598CB /* PBXContainerItemProxy */;
-		};
-		4327EEBB20E1E562002598CB /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C12EA236198B436800309FA4 /* RileyLink */;
-			targetProxy = 4327EEBA20E1E562002598CB /* PBXContainerItemProxy */;
 		};
 		4352A72B20DEC9B700CAC200 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -4109,20 +4062,15 @@
 			target = C10D9BC01C8269D500378342 /* MinimedKit */;
 			targetProxy = C10D9BD41C8269D500378342 /* PBXContainerItemProxy */;
 		};
-		C12EA258198B436900309FA4 /* PBXTargetDependency */ = {
+		C1785B4A22E4E3F70052C422 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C12EA236198B436800309FA4 /* RileyLink */;
-			targetProxy = C12EA257198B436900309FA4 /* PBXContainerItemProxy */;
+			targetProxy = C1785B4922E4E3F70052C422 /* PBXContainerItemProxy */;
 		};
 		C1B383171CD0665D00CE7782 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C1B3830A1CD0665D00CE7782 /* NightscoutUploadKit */;
 			targetProxy = C1B383161CD0665D00CE7782 /* PBXContainerItemProxy */;
-		};
-		C1B383191CD0665D00CE7782 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C12EA236198B436800309FA4 /* RileyLink */;
-			targetProxy = C1B383181CD0665D00CE7782 /* PBXContainerItemProxy */;
 		};
 		C1B3831F1CD0665D00CE7782 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

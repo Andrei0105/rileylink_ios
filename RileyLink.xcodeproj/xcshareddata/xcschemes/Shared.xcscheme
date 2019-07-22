@@ -198,16 +198,6 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C12EA251198B436800309FA4"
-               BuildableName = "RileyLinkTests.xctest"
-               BlueprintName = "RileyLinkTests"
-               ReferencedContainer = "container:RileyLink.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "C1FFAF7F213323CC00C50C1D"
                BuildableName = "OmniKitTests.xctest"
                BlueprintName = "OmniKitTests"
