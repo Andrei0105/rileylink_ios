@@ -459,7 +459,7 @@ extension MinimedPumpManager {
             
             func addReconciliationMapping(startTime: Date, uuid: UUID, eventRaw: Data, index: Int) -> Void {
                 let mapping = ReconciledDoseMapping(startTime: startTime, uuid: uuid, eventRaw: eventRaw)
-                self.log.debug("Adding reconciliation mapping %@ -> %@", eventRaw.hexadecimalString, uuid.asRaw.hexadecimalString)
+                self.log.default("Adding reconciliation mapping %{public}@ -> %{public}@", eventRaw.hexadecimalString, uuid.asRaw.hexadecimalString)
                 state.reconciliationMappings[eventRaw] = mapping
             }
             
@@ -468,7 +468,7 @@ extension MinimedPumpManager {
             allPending = allPending.map { (dose) -> UnfinalizedDose in
                 if let index = reconcilableEvents.firstMatchingIndex(for: dose, within: matchingTimeWindow) {
                     let historyEvent = reconcilableEvents[index]
-                    self.log.debug("Matched pending dose %@ to history record %@", String(describing: dose), String(describing: historyEvent))
+                    self.log.default("Matched pending dose %{public}@ to history record %{public}@", String(describing: dose), String(describing: historyEvent))
                     addReconciliationMapping(startTime: dose.startTime, uuid: dose.uuid, eventRaw: historyEvent.raw, index: index)
                     var reconciledDose = dose
                     reconciledDose.isReconciledWithHistory = true
@@ -503,7 +503,7 @@ extension MinimedPumpManager {
             // Update pump event data (sync id, start time, duration) using reconciled pending doses
             let reconciledPendingDoses = (state.pendingDoses + [state.unfinalizedTempBasal, state.unfinalizedBolus]).compactMap { $0 }.filter { $0.isReconciledWithHistory }
             var pendingDosesByUUID = Dictionary(uniqueKeysWithValues: reconciledPendingDoses.map({ ($0.uuid, $0) }))
-            let reconciledHistoryEvents = events.map({ (event) -> NewPumpEvent in
+            let allHistoryEvents = events.map({ (event) -> NewPumpEvent in
                 guard let mapping = state.reconciliationMappings[event.raw], let pendingDose = pendingDosesByUUID[mapping.uuid] else {
                     return event
                 }
@@ -514,7 +514,22 @@ extension MinimedPumpManager {
             
             state.lastReconciliation = Date()
 
-            mergedPumpEvents = reconciledHistoryEvents + allPending.filter { !$0.isReconciledWithHistory }.map { NewPumpEvent($0) }
+            mergedPumpEvents = allHistoryEvents + allPending.filter { !$0.isReconciledWithHistory }.map { NewPumpEvent($0) }
+            
+            // Update suspend/resume
+            for event in mergedPumpEvents {
+                guard let dose = event.dose else {
+                    return
+                }
+                switch dose.type {
+                case .suspend:
+                    state.suspendState = .suspended(dose.startDate)
+                case .resume:
+                    state.suspendState = .resumed(dose.startDate)
+                default:
+                    break
+                }
+            }
         }
         return mergedPumpEvents
     }
