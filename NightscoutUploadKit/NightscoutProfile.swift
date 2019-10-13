@@ -156,10 +156,11 @@ public struct LoopSettings {
     let maximumBasalRatePerHour: Double?
     let maximumBolus: Double?
     let deviceToken: Data?
+    let pushEnvironment: String?
     let bundleIdentifier: String?
 
     public init(dosingEnabled: Bool, overridePresets: [TemporaryScheduleOverride], scheduleOverride: TemporaryScheduleOverride?, minimumBGGuard: Double?, preMealTargetRange: ClosedRange<Double>?, maximumBasalRatePerHour: Double?, maximumBolus: Double?,
-                deviceToken: Data?, bundleIdentifier: String?) {
+                deviceToken: Data?, pushEnvironment: String?, bundleIdentifier: String?) {
         self.dosingEnabled = dosingEnabled
         self.overridePresets = overridePresets
         self.scheduleOverride = scheduleOverride
@@ -168,6 +169,7 @@ public struct LoopSettings {
         self.maximumBasalRatePerHour = maximumBasalRatePerHour
         self.maximumBolus = maximumBolus
         self.deviceToken = deviceToken
+        self.pushEnvironment = pushEnvironment
         self.bundleIdentifier = bundleIdentifier
     }
 
@@ -200,6 +202,10 @@ public struct LoopSettings {
         
         if let deviceToken = deviceToken {
             rval["deviceToken"] = deviceToken.hexadecimalString
+        }
+        
+        if let pushEnvironment = pushEnvironment {
+            rval["pushEnvironment"] = pushEnvironment
         }
         
         if let bundleIdentifier = bundleIdentifier {
