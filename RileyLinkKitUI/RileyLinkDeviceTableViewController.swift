@@ -114,6 +114,19 @@ public class RileyLinkDeviceTableViewController: UITableViewController {
         }
     }
     
+    func updateBatteryAsUptime() {
+        device.runSession(withName: "Get stats for uptime") { (session) in
+            do {
+                let statistics = try session.mana
+                DispatchQueue.main.async {
+                    self.uptime = statistics.uptime
+                }
+            } catch let error {
+                self.log.error("Failed to get stats for uptime: %{public}@", String(describing: error))
+            }
+        }
+    }
+    
     func updateFrequency() {
 
         device.runSession(withName: "Get base frequency") { (session) in

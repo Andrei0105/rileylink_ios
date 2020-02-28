@@ -19,6 +19,9 @@ public class RileyLinkDevice {
     private var bleFirmwareVersion: BLEFirmwareVersion?
 
     // Confined to `manager.queue`
+    private var batteryLevelRiley: UInt8?
+    
+    // Confined to `manager.queue`
     private var radioFirmwareVersion: RadioFirmwareVersion?
 
     // Confined to `lock`
@@ -130,6 +133,8 @@ extension RileyLinkDevice {
         public let lastIdle: Date?
 
         public let name: String?
+        
+        public let batteryLevelRiley: UInt8?
 
         public let bleFirmwareVersion: BLEFirmwareVersion?
 
@@ -145,6 +150,7 @@ extension RileyLinkDevice {
             completion(Status(
                 lastIdle: lastIdle,
                 name: self.name,
+                batteryLevelRiley: self.batteryLevelRiley,
                 bleFirmwareVersion: self.bleFirmwareVersion,
                 radioFirmwareVersion: self.radioFirmwareVersion
             ))
@@ -374,6 +380,9 @@ extension RileyLinkDevice: PeripheralManagerDelegate {
         let bleVersionString = try manager.readBluetoothFirmwareVersion(timeout: 1)
         bleFirmwareVersion = BLEFirmwareVersion(versionString: bleVersionString)
 
+        let batteryLevel = try manager.readBatteryLevel(timeout: 1)
+        batteryLevelRiley = batteryLevel
+        
         let radioVersionString = try manager.readRadioFirmwareVersion(timeout: 1, responseType: bleFirmwareVersion?.responseType ?? .buffered)
         radioFirmwareVersion = RadioFirmwareVersion(versionString: radioVersionString)
     }
