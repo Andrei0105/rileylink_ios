@@ -44,6 +44,23 @@ extension CommandResponseViewController {
         }
     }
 
+    static func readPodStatus(pumpManager: OmnipodPumpManager) -> T {
+        return T { (completionHandler) -> String in
+            pumpManager.readPodStatus() { (error) in
+                let response: String
+                if let error = error {
+                    response = String(describing: error)
+                } else {
+                    response = self.successText
+                }
+                DispatchQueue.main.async {
+                    completionHandler(response)
+                }
+            }
+            return LocalizedString("Read Pod Status…", comment: "Progress message for reading Pod status.")
+        }
+    }
+
     static func testingCommands(pumpManager: OmnipodPumpManager) -> T {
         return T { (completionHandler) -> String in
             pumpManager.testingCommands() { (error) in
@@ -75,6 +92,23 @@ extension CommandResponseViewController {
                 }
             }
             return LocalizedString("Play Test Beeps…", comment: "Progress message for play test beeps.")
+        }
+    }
+
+    static func readPulseLog(pumpManager: OmnipodPumpManager) -> T {
+        return T { (completionHandler) -> String in
+            pumpManager.readPulseLog() { (error) in
+                let response: String
+                if let error = error {
+                    response = String(describing: error)
+                } else {
+                    response = self.successText
+                }
+                DispatchQueue.main.async {
+                    completionHandler(response)
+                }
+            }
+            return LocalizedString("Reading Pulse Log…", comment: "Progress message for reading pulse log.")
         }
     }
 }

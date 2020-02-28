@@ -200,16 +200,17 @@ public class PodCommsSession {
 
         var sentNonce: UInt32?
 
-
         while (triesRemaining > 0) {
             triesRemaining -= 1
 
-            if let nonceBlock = messageBlocks[0] as? NonceResyncableMessageBlock {
-                sentNonce = nonceBlock.nonce
+            for command in blocksToSend {
+                if let nonceBlock = command as? NonceResyncableMessageBlock {
+                    sentNonce = nonceBlock.nonce
+                    break // N.B. all nonce commands in single message should have the same value
+                }
             }
 
             let message = Message(address: podState.address, messageBlocks: blocksToSend, sequenceNum: messageNumber, expectFollowOnMessage: expectFollowOnMessage)
-
 
             let response = try transport.sendMessage(message)
             
@@ -229,10 +230,11 @@ public class PodCommsSession {
                     errorResponse.errorReponseType == .badNonce
                 {
                     podState.resyncNonce(syncWord: errorResponse.nonceSearchKey, sentNonce: sentNonce, messageSequenceNum: message.sequenceNum)
-                    log.info("resyncNonce(syncWord: %02X, sentNonce: %04X, messageSequenceNum: %d) -> %04X", errorResponse.nonceSearchKey, sentNonce, message.sequenceNum, podState.currentNonce)
+                    log.info("resyncNonce(syncWord: 0x%02x, sentNonce: 0x%04x, messageSequenceNum: %d) -> 0x%04x", errorResponse.nonceSearchKey, sentNonce, message.sequenceNum, podState.currentNonce)
                     
                     blocksToSend = blocksToSend.map({ (block) -> MessageBlock in
                         if var resyncableBlock = block as? NonceResyncableMessageBlock {
+                            log.info("Replaced old nonce 0x%04x with resync nonce 0x%04x", resyncableBlock.nonce, podState.currentNonce)
                             resyncableBlock.nonce = podState.currentNonce
                             return resyncableBlock
                         } else {
@@ -256,7 +258,7 @@ public class PodCommsSession {
     public func prime() throws -> TimeInterval {
         //4c00 00c8 0102
 
-        let primeDuration = TimeInterval(seconds: 55)
+        let primeDuration = TimeInterval(seconds: 55)   // a bit more than (Pod.primeUnits / Pod.primeDeliveryRate)
         
         // Skip following alerts if we've already done them before
         if podState.setupProgress != .startingPrime {
@@ -281,7 +283,7 @@ public class PodCommsSession {
         podState.primeFinishTime = primeFinishTime
         podState.setupProgress = .startingPrime
 
-        let timeBetweenPulses = TimeInterval(seconds: 1)
+        let timeBetweenPulses = TimeInterval(seconds: Pod.secondsPerPrimePulse)
         let bolusSchedule = SetInsulinScheduleCommand.DeliverySchedule.bolus(units: Pod.primeUnits, timeBetweenPulses: timeBetweenPulses)
         let scheduleCommand = SetInsulinScheduleCommand(nonce: podState.currentNonce, deliverySchedule: bolusSchedule)
         let bolusExtraCommand = BolusExtraCommand(units: Pod.primeUnits, timeBetweenPulses: timeBetweenPulses)
@@ -335,8 +337,16 @@ public class PodCommsSession {
         } catch {} // never critical
     }
 
+    private func markSetupProgressCompleted(statusResponse: StatusResponse) {
+        if (podState.setupProgress != .completed) {
+            podState.setupProgress = .completed
+            podState.setupUnitsDelivered = statusResponse.insulin // stash the current insulin delivered value as the baseline
+            log.info("Total setup units delivered: %@", String(describing: statusResponse.insulin))
+        }
+    }
+
     public func insertCannula() throws -> TimeInterval {
-        let insertionWait: TimeInterval = .seconds(10)
+        let insertionWait: TimeInterval = .seconds(Pod.cannulaInsertionUnits / Pod.primeDeliveryRate)
 
         guard let activatedAt = podState.activatedAt else {
             throw PodCommsError.noPodPaired
@@ -345,15 +355,17 @@ public class PodCommsSession {
         if podState.setupProgress == .startingInsertCannula || podState.setupProgress == .cannulaInserting {
             // We started cannula insertion, but didn't get confirmation somehow, so check status
             let status: StatusResponse = try send([GetStatusCommand()])
-            podState.updateFromStatusResponse(status)
             if status.podProgressStatus == .cannulaInserting {
                 podState.setupProgress = .cannulaInserting
-                return insertionWait// Not sure when it started, wait full time to be sure
+                podState.updateFromStatusResponse(status)
+                return insertionWait // Not sure when it started, wait full time to be sure
             }
             if status.podProgressStatus.readyForDelivery {
-                podState.setupProgress = .completed
+                markSetupProgressCompleted(statusResponse: status)
+                podState.updateFromStatusResponse(status)
                 return TimeInterval(0) // Already done; no need to wait
             }
+            podState.updateFromStatusResponse(status)
         } else {
             // Configure all the non-optional Pod Alarms
             let expirationTime = activatedAt + Pod.nominalPodLife
@@ -366,7 +378,7 @@ public class PodCommsSession {
         
         // Mark 0.5U delivery with 1 second between pulses for cannula insertion
 
-        let timeBetweenPulses = TimeInterval(seconds: 1)
+        let timeBetweenPulses = TimeInterval(seconds: Pod.secondsPerPrimePulse)
         let bolusSchedule = SetInsulinScheduleCommand.DeliverySchedule.bolus(units: Pod.cannulaInsertionUnits, timeBetweenPulses: timeBetweenPulses)
         let bolusScheduleCommand = SetInsulinScheduleCommand(nonce: podState.currentNonce, deliverySchedule: bolusSchedule)
         
@@ -382,13 +394,13 @@ public class PodCommsSession {
     public func checkInsertionCompleted() throws {
         if podState.setupProgress == .cannulaInserting {
             let response: StatusResponse = try send([GetStatusCommand()])
-            podState.updateFromStatusResponse(response)
             if response.podProgressStatus.readyForDelivery {
-                podState.setupProgress = .completed
+                markSetupProgressCompleted(statusResponse: response)
             }
+            podState.updateFromStatusResponse(response)
         }
     }
-    
+
     // Throws SetBolusError
     public enum DeliveryCommandResult {
         case success(statusResponse: StatusResponse)
@@ -405,7 +417,7 @@ public class PodCommsSession {
     
     public func bolus(units: Double, acknowledgementBeep: Bool = false, completionBeep: Bool = false, programReminderInterval: TimeInterval = 0) -> DeliveryCommandResult {
         
-        let timeBetweenPulses = TimeInterval(seconds: 2)
+        let timeBetweenPulses = TimeInterval(seconds: Pod.secondsPerBolusPulse)
         let bolusSchedule = SetInsulinScheduleCommand.DeliverySchedule.bolus(units: units, timeBetweenPulses: timeBetweenPulses)
         let bolusScheduleCommand = SetInsulinScheduleCommand(nonce: podState.currentNonce, deliverySchedule: bolusSchedule)
         
@@ -416,7 +428,7 @@ public class PodCommsSession {
         // Between bluetooth and the radio and firmware, about 1.2s on average passes before we start tracking
         let commsOffset = TimeInterval(seconds: -1.5)
         
-        let bolusExtraCommand = BolusExtraCommand(units: units, acknowledgementBeep: acknowledgementBeep, completionBeep: completionBeep)
+        let bolusExtraCommand = BolusExtraCommand(units: units, timeBetweenPulses: timeBetweenPulses, acknowledgementBeep: acknowledgementBeep, completionBeep: completionBeep, programReminderInterval: programReminderInterval)
         do {
             let statusResponse: StatusResponse = try send([bolusScheduleCommand, bolusExtraCommand])
             podState.unfinalizedBolus = UnfinalizedDose(bolusAmount: units, startTime: Date().addingTimeInterval(commsOffset), scheduledCertainty: .certain)
@@ -446,7 +458,7 @@ public class PodCommsSession {
     public func setTempBasal(rate: Double, duration: TimeInterval, acknowledgementBeep: Bool = false, completionBeep: Bool = false, programReminderInterval: TimeInterval = 0) -> DeliveryCommandResult {
         
         let tempBasalCommand = SetInsulinScheduleCommand(nonce: podState.currentNonce, tempBasalRate: rate, duration: duration)
-        let tempBasalExtraCommand = TempBasalExtraCommand(rate: rate, duration: duration, acknowledgementBeep: acknowledgementBeep, completionBeep: completionBeep)
+        let tempBasalExtraCommand = TempBasalExtraCommand(rate: rate, duration: duration, acknowledgementBeep: acknowledgementBeep, completionBeep: completionBeep, programReminderInterval: programReminderInterval)
 
         guard podState.unfinalizedBolus?.isFinished != false else {
             return DeliveryCommandResult.certainFailure(error: .unfinalizedBolus)
@@ -465,12 +477,21 @@ public class PodCommsSession {
         }
     }
     
+    // cancelDelivery() implements a smart interface to the Pod's cancel delivery command
     public func cancelDelivery(deliveryType: CancelDeliveryCommand.DeliveryType, beepType: BeepType) -> CancelDeliveryResult {
+        var message: [MessageBlock]
 
-        let cancelDelivery = CancelDeliveryCommand(nonce: podState.currentNonce, deliveryType: deliveryType, beepType: beepType)
-
+        // Special case handling for a non-silent cancel all which would normally emit 3 sets of beeps!
+        if beepType != .noBeep && deliveryType == .all {
+            // For this case use two cancel commands in a one message with the 1st command silently cancelling all but the basal
+            // and the 2nd command cancelling only the basal with the specified beepType so there will only be a single beep sequence.
+            message = [CancelDeliveryCommand(nonce: podState.currentNonce, deliveryType: .allButBasal, beepType: .noBeep),
+                       CancelDeliveryCommand(nonce: podState.currentNonce, deliveryType: .basal, beepType: beepType)]
+        } else {
+            message = [CancelDeliveryCommand(nonce: podState.currentNonce, deliveryType: deliveryType, beepType: beepType)]
+        }
         do {
-            let status: StatusResponse = try send([cancelDelivery])
+            let status: StatusResponse = try send(message)
             let now = Date()
             if deliveryType.contains(.basal) {
                 podState.unfinalizedSuspend = UnfinalizedDose(suspendStartTime: now, scheduledCertainty: .certain)
@@ -485,7 +506,9 @@ public class PodCommsSession {
                 finishTime > now
             {
                 podState.unfinalizedTempBasal?.cancel(at: now)
-                podState.suspendState = .resumed(now)
+                if !deliveryType.contains(.basal) {
+                    podState.suspendState = .resumed(now)
+                }
                 canceledDose = podState.unfinalizedTempBasal
                 log.info("Interrupted temp basal: %@", String(describing: canceledDose))
             }
@@ -533,7 +556,7 @@ public class PodCommsSession {
     public func setBasalSchedule(schedule: BasalSchedule, scheduleOffset: TimeInterval, acknowledgementBeep: Bool = false, completionBeep: Bool = false, programReminderInterval: TimeInterval = 0) throws -> StatusResponse {
 
         let basalScheduleCommand = SetInsulinScheduleCommand(nonce: podState.currentNonce, basalSchedule: schedule, scheduleOffset: scheduleOffset)
-        let basalExtraCommand = BasalScheduleExtraCommand.init(schedule: schedule, scheduleOffset: scheduleOffset, acknowledgementBeep: acknowledgementBeep, completionBeep: completionBeep, programReminderInterval: 0)
+        let basalExtraCommand = BasalScheduleExtraCommand.init(schedule: schedule, scheduleOffset: scheduleOffset, acknowledgementBeep: acknowledgementBeep, completionBeep: completionBeep, programReminderInterval: programReminderInterval)
 
         do {
             let status: StatusResponse = try send([basalScheduleCommand, basalExtraCommand])
@@ -587,18 +610,20 @@ public class PodCommsSession {
         return statusResponse
     }
 
-    public func readFlashLogsRequest(podInfoResponseSubType: PodInfoResponseSubType) throws {
+    @discardableResult
+    public func readPulseLogsRequest(podInfoResponseSubType: PodInfoResponseSubType) throws -> PodInfoResponse {
         let blocksToSend = [GetStatusCommand(podInfoType: podInfoResponseSubType)]
         let message = Message(address: podState.address, messageBlocks: blocksToSend, sequenceNum: transport.messageNumber)
         let messageResponse = try transport.sendMessage(message)
 
         if let podInfoResponseMessageBlock = messageResponse.messageBlocks[0] as? PodInfoResponse {
-            log.default("Pod flash log: %@", String(describing: podInfoResponseMessageBlock))
+            log.default("Pod pulse log: %@", String(describing: podInfoResponseMessageBlock))
+            return podInfoResponseMessageBlock
         } else if let fault = messageResponse.fault {
             handlePodFault(fault: fault)
             throw PodCommsError.podFault(fault: fault)
         } else {
-            log.error("Unexpected Pod flash log response: %@", String(describing: messageResponse.messageBlocks[0]))
+            log.error("Unexpected Pod pulse log response: %@", String(describing: messageResponse.messageBlocks[0]))
             throw PodCommsError.unexpectedResponse(response: messageResponse.messageBlocks[0].blockType)
         }
     }
