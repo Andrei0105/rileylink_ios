@@ -19,6 +19,7 @@ extension CBUUIDRawValue where RawValue == String {
 
 enum RileyLinkServiceUUID: String, CBUUIDRawValue {
     case main = "0235733B-99C5-4197-B856-69219C2A3845"
+    case battery = "180F"
 }
 
 enum MainServiceCharacteristicUUID: String, CBUUIDRawValue {
@@ -28,6 +29,10 @@ enum MainServiceCharacteristicUUID: String, CBUUIDRawValue {
     case timerTick       = "6E6C7910-B89E-43A5-78AF-50C5E2B86F7E"
     case firmwareVersion = "30D99DC9-7C91-4295-A051-0A104D238CF2"
     case ledMode         = "C6D84241-F1A7-4F9C-A25F-FCE16732F14E"
+}
+
+enum BatteryServiceCharacteristicUUID: String, CBUUIDRawValue {
+    case battery_level   = "2A19"
 }
 
 enum RileyLinkLEDMode: UInt8 {
@@ -48,6 +53,9 @@ extension PeripheralManager.Configuration {
                     MainServiceCharacteristicUUID.timerTick.cbUUID,
                     MainServiceCharacteristicUUID.firmwareVersion.cbUUID,
                     MainServiceCharacteristicUUID.ledMode.cbUUID
+                    ],
+                RileyLinkServiceUUID.battery.cbUUID: [
+                    BatteryServiceCharacteristicUUID.battery_level.cbUUID
                 ]
             ],
             notifyingCharacteristics: [
@@ -82,6 +90,16 @@ fileprivate extension CBPeripheral {
     }
 }
 
+
+fileprivate extension CBPeripheral {
+    func getBatteryCharacteristic(_ uuid: BatteryServiceCharacteristicUUID, serviceUUID: RileyLinkServiceUUID = .battery) -> CBCharacteristic? {
+        guard let service = services?.itemWithUUID(serviceUUID.cbUUID) else {
+            return nil
+        }
+
+        return service.characteristics?.itemWithUUID(uuid.cbUUID)
+    }
+}
 
 extension CBCentralManager {
     func scanForPeripherals(withOptions options: [String: Any]? = nil) {
@@ -290,6 +308,28 @@ extension PeripheralManager {
             throw RileyLinkDeviceError.peripheralManagerError(error)
         }
     }
+    
+    func readBatteryLevel(timeout: TimeInterval) throws -> UInt8 {
+          guard let characteristic = peripheral.getBatteryCharacteristic(.battery_level) else {
+              throw RileyLinkDeviceError.peripheralManagerError(.unknownCharacteristic)
+          }
+
+          do {
+              guard let data = try readValue(for: characteristic, timeout: timeout) else {
+                  // TODO: This is an "unknown value" issue, not a timeout
+                  throw RileyLinkDeviceError.peripheralManagerError(.timeout)
+              }
+
+              guard let battery_level = UInt8(data) else {
+                  throw RileyLinkDeviceError.invalidResponse(data)
+              }
+
+              return battery_level
+          } catch let error as PeripheralManagerError {
+              throw RileyLinkDeviceError.peripheralManagerError(error)
+          }
+      }
+    
 }
 
 
