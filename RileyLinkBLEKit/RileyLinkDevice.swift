@@ -94,7 +94,11 @@ extension RileyLinkDevice {
     }
     
     public func getBatterylevel() -> String {
-        return manager.readBatteryLevel(timeout: 1)
+        do {
+            return manager.readBatteryLevel(timeout: 1)
+        } catch {
+            print("")
+        }
     }
     
     public func enableBLELEDs() {
