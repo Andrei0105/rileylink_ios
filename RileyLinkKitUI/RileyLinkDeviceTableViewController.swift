@@ -117,7 +117,7 @@ public class RileyLinkDeviceTableViewController: UITableViewController {
     func updateBatteryAsUptime() {
         device.runSession(withName: "Get stats for uptime") { (session) in
             do {
-                let batteryLevel = try manager.readBatteryLevel(timeout: 1)
+                let batteryLevel = try device.manager.readBatteryLevel(timeout: 1)
                 DispatchQueue.main.async {
                     self.uptime = batteryLevel
                 }
