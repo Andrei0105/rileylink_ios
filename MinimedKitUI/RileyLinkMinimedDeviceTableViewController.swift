@@ -125,8 +125,7 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
                    DispatchQueue.main.async {
                        self.uptime = batteryLevel
                    }
-               } catch let error {
-                   self.log.error("Failed to get stats for uptime: %{public}@", String(describing: error))
+               } catch {
                }
            }
        }
