@@ -32,7 +32,7 @@ public class RileyLinkDeviceTableViewController: UITableViewController {
         }
     }
     
-    private var uptime: TimeInterval? {
+    private var uptime: String? {
         didSet {
             guard isViewLoaded else {
                 return
@@ -407,9 +407,9 @@ private extension UITableViewCell {
         detailTextLabel?.text = formatter.decibleString(from: decibles) ?? "-"
     }
     
-    func setDetailAge(_ age: TimeInterval?) {
+    func setDetailAge(_ age: String?) {
         if let age = age {
-            detailTextLabel?.text = age.format(using: [.day, .hour, .minute])
+            detailTextLabel?.text = age
         } else {
             detailTextLabel?.text = ""
         }
