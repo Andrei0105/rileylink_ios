@@ -53,7 +53,7 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
         }
     }
     
-    private var uptime: TimeInterval? {
+    private var uptime: String? {
         didSet {
             guard isViewLoaded else {
                 return
@@ -107,16 +107,29 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
         device.readRSSI()
     }
     
-    func updateUptime() {
-        device.runSession(withName: "Get stats for uptime") { (session) in
-            do {
-                let statistics = try session.getRileyLinkStatistics()
-                DispatchQueue.main.async {
-                    self.uptime = statistics.uptime
-                }
-            } catch { }
-        }
-    }
+//    func updateUptime() {
+//        device.runSession(withName: "Get stats for uptime") { (session) in
+//            do {
+//                let statistics = try session.getRileyLinkStatistics()
+//                DispatchQueue.main.async {
+//                    self.uptime = statistics.uptime
+//                }
+//            } catch { }
+//        }
+//    }
+    
+    func updateBatteryAsUptime() {
+           device.runSession(withName: "Get stats for uptime") { (session) in
+               do {
+                   let batteryLevel = try self.device.getBatterylevel()
+                   DispatchQueue.main.async {
+                       self.uptime = batteryLevel
+                   }
+               } catch let error {
+                   self.log.error("Failed to get stats for uptime: %{public}@", String(describing: error))
+               }
+           }
+       }
 
     private func updateDeviceStatus() {
         device.getStatus { (status) in
@@ -184,7 +197,7 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
         
         updateRSSI()
         
-        updateUptime()
+        updateBatteryAsUptime()
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
@@ -528,9 +541,9 @@ private extension UITableViewCell {
         detailTextLabel?.text = formatter.decibleString(from: decibles) ?? "-"
     }
 
-    func setDetailAge(_ age: TimeInterval?) {
+    func setDetailAge(_ age: String?) {
         if let age = age {
-            detailTextLabel?.text = age.format(using: [.day, .hour, .minute])
+            detailTextLabel?.text = age
         } else {
             detailTextLabel?.text = ""
         }
