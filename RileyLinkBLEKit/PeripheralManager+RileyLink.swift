@@ -309,7 +309,7 @@ extension PeripheralManager {
         }
     }
     
-    func readBatteryLevel(timeout: TimeInterval) throws -> UInt8 {
+    func readBatteryLevel(timeout: TimeInterval) throws -> String {
           guard let characteristic = peripheral.getBatteryCharacteristic(.battery_level) else {
               throw RileyLinkDeviceError.peripheralManagerError(.unknownCharacteristic)
           }
@@ -320,7 +320,7 @@ extension PeripheralManager {
                   throw RileyLinkDeviceError.peripheralManagerError(.timeout)
               }
 
-              guard let battery_level = UInt8(data) else {
+              guard let battery_level = String(bytes: data, encoding: .utf8) else {
                   throw RileyLinkDeviceError.invalidResponse(data)
               }
 
