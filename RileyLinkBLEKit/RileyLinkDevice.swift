@@ -95,7 +95,7 @@ extension RileyLinkDevice {
     
     public func getBatterylevel() -> String {
         do {
-            return manager.readBatteryLevel(timeout: 1)
+            return try! manager.readBatteryLevel(timeout: 1)
         } catch {
             print("")
         }
