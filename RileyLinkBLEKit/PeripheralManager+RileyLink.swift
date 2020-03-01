@@ -320,7 +320,7 @@ extension PeripheralManager {
                   throw RileyLinkDeviceError.peripheralManagerError(.timeout)
               }
 
-              let battery_level = "\(data.first)"
+              let battery_level = "\(data[0])"
 
               return battery_level
           } catch let error as PeripheralManagerError {
