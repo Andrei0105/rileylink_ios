@@ -32,7 +32,7 @@ public class RileyLinkDeviceTableViewController: UITableViewController {
         }
     }
     
-    private var uptime: String? {
+    private var uptime: TimeInterval? {
         didSet {
             guard isViewLoaded else {
                 return
@@ -112,32 +112,19 @@ public class RileyLinkDeviceTableViewController: UITableViewController {
         }
     }
     
-//    func updateUptime() {
-//        device.runSession(withName: "Get stats for uptime") { (session) in
-//            do {
-//                let statistics = try session.getRileyLinkStatistics()
-//                DispatchQueue.main.async {
-//                    self.uptime = statistics.uptime
-//                }
-//            } catch let error {
-//                self.log.error("Failed to get stats for uptime: %{public}@", String(describing: error))
-//            }
-//        }
-//    }
-
-    func updateBatteryAsUptime() {
+    func updateUptime() {
         device.runSession(withName: "Get stats for uptime") { (session) in
             do {
-                let batteryLevel = try self.device.getBatterylevel()
+                let statistics = try session.getRileyLinkStatistics()
                 DispatchQueue.main.async {
-                    self.uptime = batteryLevel
+                    self.uptime = statistics.uptime
                 }
             } catch let error {
                 self.log.error("Failed to get stats for uptime: %{public}@", String(describing: error))
             }
         }
     }
-    
+
     func updateBatteryLevel() {
         device.runSession(withName: "Get battery level") { (session) in
             do {
@@ -220,7 +207,7 @@ public class RileyLinkDeviceTableViewController: UITableViewController {
         
         updateFrequency()
 
-        updateBatteryAsUptime()
+        updateUptime()
         
         updateBatteryLevel()
         
@@ -437,9 +424,9 @@ private extension UITableViewCell {
         detailTextLabel?.text = formatter.decibleString(from: decibles) ?? "-"
     }
     
-    func setDetailAge(_ age: String?) {
-        if let unwrappedAge = age {
-            detailTextLabel?.text = unwrappedAge
+    func setDetailAge(_ age: TimeInterval?) {
+        if let age = age {
+            detailTextLabel?.text = age.format(using: [.day, .hour, .minute])
         } else {
             detailTextLabel?.text = ""
         }

@@ -81,11 +81,8 @@ extension CommandResponseViewController {
             ops?.runSession(withName: "Get Statistics", using: device) { (session) in
                 let response: String
                 do {
-//                    let stats = try session.getStatistics()
-                    let stats = try device.getBatterylevel()
-                    print(stats)
-//                    response = String(describing: stats)
-                    response = stats
+                    let stats = try session.getStatistics()
+                    response = String(describing: stats)
                 } catch let error {
                     response = String(describing: error)
                 }
