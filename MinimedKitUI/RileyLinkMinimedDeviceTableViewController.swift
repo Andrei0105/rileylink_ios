@@ -63,6 +63,16 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
         }
     }
 
+    private var battery: String? {
+        didSet {
+            guard isViewLoaded else {
+                return
+            }
+            
+            cellForRow(.battery)?.setDetailBatteryLevel(battery)
+        }
+    }
+    
     private var lastIdle: Date? {
         didSet {
             guard isViewLoaded else {
@@ -130,6 +140,18 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
            }
        }
 
+    func updateBatteryLevel() {
+           device.runSession(withName: "Get battery level") { (session) in
+               do {
+                   let batteryLevel = try self.device.getBatterylevel()
+                   DispatchQueue.main.async {
+                       self.battery = batteryLevel
+                   }
+               } catch {
+               }
+           }
+       }
+    
     private func updateDeviceStatus() {
         device.getStatus { (status) in
             DispatchQueue.main.async {
@@ -197,6 +219,8 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
         updateRSSI()
         
         updateBatteryAsUptime()
+        
+        updateBatteryLevel()
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
@@ -250,6 +274,7 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
         case connection
         case uptime
         case idleStatus
+        case battery
     }
 
     private enum PumpRow: Int, CaseCountable {
@@ -333,6 +358,9 @@ public class RileyLinkMinimedDeviceTableViewController: UITableViewController {
             case .idleStatus:
                 cell.textLabel?.text = LocalizedString("On Idle", comment: "The title of the cell showing the last idle")
                 cell.setDetailDate(lastIdle, formatter: dateFormatter)
+            case .battery:
+                cell.textLabel?.text = NSLocalizedString("Battery Level", comment: "The title of the cell showing battery level")
+                cell.setDetailBatteryLevel(battery)
             }
         case .pump:
             switch PumpRow(rawValue: indexPath.row)! {
@@ -543,6 +571,14 @@ private extension UITableViewCell {
     func setDetailAge(_ age: String?) {
         if let unwrappedAge = age {
             detailTextLabel?.text = unwrappedAge
+        } else {
+            detailTextLabel?.text = ""
+        }
+    }
+
+    func setDetailBatteryLevel(_ batteryLevel: String?) {
+        if let unwrappedBatteryLevel = batteryLevel {
+            detailTextLabel?.text = unwrappedBatteryLevel
         } else {
             detailTextLabel?.text = ""
         }
