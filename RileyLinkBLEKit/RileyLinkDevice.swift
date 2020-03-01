@@ -97,7 +97,6 @@ extension RileyLinkDevice {
         do {
             return try! manager.readBatteryLevel(timeout: 1)
         } catch {
-            print("")
         }
     }
     
