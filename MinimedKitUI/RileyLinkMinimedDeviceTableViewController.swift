@@ -566,7 +566,7 @@ private extension UITableViewCell {
 
     func setDetailBatteryLevel(_ batteryLevel: String?) {
         if let unwrappedBatteryLevel = batteryLevel {
-            detailTextLabel?.text = unwrappedBatteryLevel
+            detailTextLabel?.text = unwrappedBatteryLevel + "%"
         } else {
             detailTextLabel?.text = ""
         }
