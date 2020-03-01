@@ -541,8 +541,8 @@ private extension UITableViewCell {
     }
 
     func setDetailAge(_ age: String?) {
-        if let age = age {
-            detailTextLabel?.text = age
+        if let unwrappedAge = age {
+            detailTextLabel?.text = unwrappedAge
         } else {
             detailTextLabel?.text = ""
         }
