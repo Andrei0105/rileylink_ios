@@ -83,6 +83,7 @@ extension CommandResponseViewController {
                 do {
 //                    let stats = try session.getStatistics()
                     let stats = try device.getBatterylevel()
+                    print(stats)
 //                    response = String(describing: stats)
                     response = stats
                 } catch let error {
